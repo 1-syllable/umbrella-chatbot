@@ -1,6 +1,7 @@
+from langchain_core import output_parsers
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import Run
+from langchain_core.runnables import RunnablePassthrough
 
 class Assistant:
     def __init__(
@@ -11,7 +12,6 @@ class Assistant:
         vector_store=None,
         employee_information=None,
     ):
-
         self.system_prompt = system_prompt
         self.llm = llm
         self.messages = message_history
@@ -21,10 +21,10 @@ class Assistant:
         self.chain = self._get_conversation_chain()
 
     def get_response(self, user_input):
-        return f"Hello, I'm {self.name}. How can I help you today?"
+        return self.chain.stream(user_input)
 
     def _get_conversation_chain(self):
-        prompt_template = ChatPromptTemplate(
+        prompt = ChatPromptTemplate(
             [
                 ("system", self.system_prompt),
                 MessagesPlaceholder("conversation_history"),
@@ -34,14 +34,17 @@ class Assistant:
         
         llm = self.llm
 
-        output_parser = StrOutputParser()
+        output_parsers = StrOutputParser()
 
         chain = (
             {
-                "retrieved_policy_information": self.vector_store.as_retriever(),
-                "employee_information": lambda x: self 
-             }
-
-
+             "retrieved_policy_information": self.vector_store.as_retriever(),
+             "employee_information": lambda x: self.employee_information,
+             "user_input": RunnablePassthrough(),
+             "conversation_history": lambda x: self.messages,
+            }
+            | prompt
+            | llm
+            | output_parsers
         )
-
+        return chain
